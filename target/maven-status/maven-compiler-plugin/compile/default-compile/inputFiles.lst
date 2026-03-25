@@ -1,0 +1,6 @@
+/root/workspace/ai-qa-system/src/main/java/com/example/aiqa/AiQaApplication.java
+/root/workspace/ai-qa-system/src/main/java/com/example/aiqa/controller/ChatController.java
+/root/workspace/ai-qa-system/src/main/java/com/example/aiqa/controller/PingController.java
+/root/workspace/ai-qa-system/src/main/java/com/example/aiqa/dto/ChatRequest.java
+/root/workspace/ai-qa-system/src/main/java/com/example/aiqa/dto/ChatResponse.java
+/root/workspace/ai-qa-system/src/main/java/com/example/aiqa/dto/Result.java
