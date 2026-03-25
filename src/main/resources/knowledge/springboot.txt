@@ -1,0 +1,4 @@
+Spring Boot 是一个基于 Spring 生态的快速开发框架，用于简化 Spring 应用的配置和部署。
+Spring Boot 提供自动配置、内嵌服务器、starter 依赖等能力。
+开发者可以通过少量配置快速构建独立运行的 Web 应用。
+Spring Boot 常用于构建微服务、后台管理系统和 RESTful API 服务。

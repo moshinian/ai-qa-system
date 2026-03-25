@@ -1,5 +1,8 @@
 package com.example.aiqa.dto;
 
+import lombok.Data;
+
+@Data
 public class ChatResponse {
 
     private String answer;
@@ -8,14 +11,6 @@ public class ChatResponse {
     }
 
     public ChatResponse(String answer) {
-        this.answer = answer;
-    }
-
-    public String getAnswer() {
-        return answer;
-    }
-
-    public void setAnswer(String answer) {
         this.answer = answer;
     }
 }
