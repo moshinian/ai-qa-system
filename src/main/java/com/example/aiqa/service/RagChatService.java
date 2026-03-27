@@ -1,5 +1,6 @@
 package com.example.aiqa.service;
 
+import com.example.aiqa.client.LlmClient;
 import com.example.aiqa.rag.model.KnowledgeChunk;
 import com.example.aiqa.rag.retriever.SimpleKeywordRetriever;
 import org.springframework.stereotype.Service;
@@ -11,9 +12,11 @@ import java.util.stream.Collectors;
 public class RagChatService {
 
     private final SimpleKeywordRetriever retriever;
+    private final LlmClient llmClient;
 
-    public RagChatService(SimpleKeywordRetriever retriever) {
+    public RagChatService(SimpleKeywordRetriever retriever, LlmClient llmClient) {
         this.retriever = retriever;
+        this.llmClient = llmClient;
     }
 
     public String ask(String question) {
@@ -27,18 +30,21 @@ public class RagChatService {
                 .map(chunk -> "【来源：" + chunk.getSource() + "】\n" + chunk.getContent())
                 .collect(Collectors.joining("\n\n"));
 
-        return buildMockAnswer(question, context);
+        String prompt = buildPrompt(question, context);
+        return llmClient.chat(prompt);
     }
 
-    private String buildMockAnswer(String question, String context) {
+    private String buildPrompt(String question, String context) {
         return """
-                这是基于知识库检索生成的模拟回答。
+                你是一个基于本地知识库回答问题的 AI 助手。
+                请严格根据提供的上下文回答问题，不要编造。
+                如果上下文中没有足够信息，请明确说明“知识库中未提供足够信息”。
 
-                问题：
+                知识上下文：
                 %s
 
-                命中的知识上下文：
+                用户问题：
                 %s
-                """.formatted(question, context);
+                """.formatted(context, question);
     }
 }
