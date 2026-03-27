@@ -35,8 +35,8 @@
 
 说明：
 - 当前项目根目录里没有 `mvnw`，所以本地构建依赖系统里的 `mvn`
-- 当前会话里尝试过执行 `mvn -q -DskipTests package`
-- 这次构建没有完成，不是因为 Java 代码先报错，而是因为 Maven 插件下载/本地仓库写入受限，无法据此完全确认当前代码编译通过
+- 当前会话里已执行 `mvn -q -DskipTests compile`
+- 这次编译已经通过，说明当前代码至少可以在本机环境下完成基础编译
 
 ---
 
@@ -46,7 +46,7 @@
 
 更准确地说，当前处于：
 
-**阶段 3 早期：本地知识库检索 + Prompt 组装 + OpenAI 兼容接口调用雏形**
+**阶段 3 早期：本地知识库检索 + Prompt 组装 + DeepSeek Chat API 接入雏形**
 
 也就是说，主链路已经开始从：
 
@@ -54,7 +54,7 @@
 
 演进为：
 
-用户提问 -> 本地知识库检索 -> 拼接 Prompt -> 调用 LLM（若配置了 API Key）-> 返回结果
+用户提问 -> 本地知识库检索 -> 拼接 Prompt -> 调用 DeepSeek LLM（若配置了 API Key）-> 返回结果
 
 ---
 
@@ -173,28 +173,34 @@
 - `apiKey`
 - `model`
 - `chatPath`
+- `systemPrompt`
+- `stream`
 - `temperature`
 - `connectTimeout`
 - `readTimeout`
 
 说明：
 - 已经开始把大模型调用配置化
-- 配置方式是典型的 OpenAI 兼容接口写法
+- 配置方式保持 Chat Completions 风格，但默认目标已切到 DeepSeek
 
-### 9. LLM 客户端雏形已经存在
+### 9. LLM 客户端第一版已经接入 DeepSeek
 
 已存在：
 - `src/main/java/com/example/aiqa/client/LlmClient.java`
 
 当前行为：
-- 如果没有配置 `LLM_API_KEY`，返回调试文本和 Prompt
-- 如果配置了 `LLM_API_KEY`，调用 `base-url + chat-path`
+- 如果没有配置 `DEEPSEEK_API_KEY`，返回调试文本和 Prompt
+- 如果配置了 `DEEPSEEK_API_KEY`，调用 `base-url + chat-path`
 - 使用 `RestTemplate` 发起 POST 请求
-- 按 OpenAI Chat Completions 风格解析响应
+- 请求体已按 DeepSeek Chat 接口组装 `model`、`messages`、`stream`、`temperature`
+- 按 `choices[0].message.content` 解析响应
+- 已记录请求 URL 和模型名
+- HTTP 调用失败时会记录状态码和响应体
+- 异常时已使用 `log.error(...)` 打印完整堆栈
 - 从 `choices[0].message.content` 里取答案
 
 这说明：
-- “接真实模型”的第一版代码已经写出来了
+- “接真实模型”的第一版代码已经写出来了，并已从 OpenAI 默认配置切换到 DeepSeek
 - 当前设计目标是先跑通，再逐步增强健壮性
 
 ### 10. application.yml 已加入 llm 配置
@@ -209,10 +215,12 @@ server:
   port: 8080
 
 llm:
-  base-url: ${LLM_BASE_URL:https://api.openai.com}
-  api-key: ${LLM_API_KEY:}
-  model: ${LLM_MODEL:gpt-4o-mini}
-  chat-path: /v1/chat/completions
+  base-url: ${LLM_BASE_URL:https://api.deepseek.com}
+  api-key: ${DEEPSEEK_API_KEY:}
+  model: ${LLM_MODEL:deepseek-chat}
+  chat-path: /chat/completions
+  system-prompt: ${LLM_SYSTEM_PROMPT:你是一个严谨的知识库问答助手。}
+  stream: false
   temperature: 0.2
   connect-timeout: 5000
   read-timeout: 30000
@@ -220,7 +228,53 @@ llm:
 
 说明：
 - 配置未写死，支持环境变量覆盖
-- 适合作为学习 OpenAI 兼容接口接入的第一版
+- 默认值已经切到 DeepSeek
+- 本地调试更推荐通过 `src/main/resources/application-local.yml` 配合 `local` profile 覆盖私有配置
+
+### 11. 本地 profile 调试方式已经明确
+
+当前推荐做法：
+- 在 `src/main/resources/application-local.yml` 中写入本地私有 DeepSeek 配置
+- 通过 `mvn spring-boot:run -Dspring-boot.run.profiles=local` 启动
+- 在 VS Code 中可通过 `launch.json` 或直接调试启动类进行断点调试
+
+说明：
+- `application-local.yml` 已在 `.gitignore` 中忽略
+- 当前已确认本地配置至少需要包含正确的 `base-url` 和 `chat-path`
+
+### 12. 基础异常处理已经补上雏形
+
+已新增：
+- `src/main/java/com/example/aiqa/handler/GlobalExceptionHandler.java`
+
+当前行为：
+- 对未捕获异常进行统一日志记录
+- 返回统一结构 `Result.fail(500, "服务器内部异常，请稍后重试")`
+
+说明：
+- 这是最小版全局异常处理
+- 还没有对参数校验异常、业务异常、第三方调用异常做更细粒度区分
+
+### 13. 当前包结构已做职责划分
+
+当前目录职责建议如下：
+- `controller`：接口入口层，只处理 HTTP 请求和响应
+- `service`：业务编排层，负责串起问答主链路
+- `client`：第三方服务调用层，目前主要是 DeepSeek API
+- `config`：配置绑定和配置类
+- `handler`：全局异常处理
+- `dto`：请求对象、响应对象、统一返回对象
+- `rag/loader`：知识加载
+- `rag/splitter`：文本切分
+- `rag/retriever`：检索逻辑
+- `rag/model`：RAG 过程中的中间模型
+
+当前推荐依赖方向：
+- `controller -> service -> client / rag`
+
+说明：
+- 这样更适合学习 Spring Boot 分层
+- 后续继续加校验、异常、日志、测试时，不容易把职责写乱
 
 ---
 
@@ -238,18 +292,21 @@ llm:
 - 关键词检索
 - Prompt 拼接
 - LLM 配置类
+- DeepSeek Chat API 默认配置
 - LLM 客户端第一版
 - 当未配置 API Key 时返回调试 Prompt 的机制
+- 异常日志已改为 `log.error(...)`
+- 已记录 LLM 请求 URL、状态码、响应体
+- 最小版全局异常处理器
+- `application-local.yml` 本地 profile 启动方式
 
 ### 还没做完
 
-- 没有确认当前项目在本机环境下一定能完整构建成功
 - 没有测试类或自动化测试
-- 没有全局异常处理
 - 没有请求参数校验，比如空问题、超长问题
 - 没有区分“检索失败”“模型失败”“配置缺失”等错误类型
 - `LlmClient` 目前直接返回字符串，缺少更清晰的错误建模
-- 没有日志体系，仍然有 `System.out.println`
+- 日志体系仍不完整，目前主要覆盖了 `LlmClient` 和全局兜底异常
 - 检索逻辑仍然非常基础，只是关键词匹配
 - 文本切分逻辑仍然非常基础，按字符长度硬切
 - 没有会话记忆
@@ -266,7 +323,7 @@ llm:
 
 如果在新会话中需要一句话概括当前进度，可以直接使用下面这句：
 
-**这个项目已经完成了 Java + Spring Boot AI 问答系统的最小后端骨架，并且已经具备“本地知识库检索 + Prompt 组装 + OpenAI 兼容接口调用雏形”，但还缺少测试、异常处理、健壮性和更真实的 RAG 能力。**
+**这个项目已经完成了 Java + Spring Boot AI 问答系统的最小后端骨架，并且已经具备“本地知识库检索 + Prompt 组装 + DeepSeek Chat API 接入雏形”，但还缺少测试、异常处理、健壮性和更真实的 RAG 能力。**
 
 ---
 
@@ -278,8 +335,9 @@ llm:
 
 建议先做：
 - 确认项目可以正常启动和请求
-- 用未配置 `LLM_API_KEY` 的模式手动验证接口输出
-- 如果需要，再配置真实模型 Key 验证完整链路
+- 用未配置 API Key 的模式手动验证接口输出
+- 用 `application-local.yml` 配置真实 DeepSeek Key 验证完整链路
+- 把 LLM 请求 URL、状态码、响应体日志补齐，便于定位接口问题
 
 目标：
 - 确认“检索 + Prompt + LLM 调用”主流程真正跑通
@@ -288,7 +346,7 @@ llm:
 
 建议新增：
 - 参数校验
-- 全局异常处理
+- 更细粒度的全局异常处理
 - 更明确的错误返回
 - 日志替代 `System.out.println`
 

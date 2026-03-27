@@ -2,10 +2,12 @@ server:
   port: 8080
 
 llm:
-  base-url: ${LLM_BASE_URL:https://api.openai.com}
-  api-key: ${LLM_API_KEY:}
-  model: ${LLM_MODEL:gpt-4o-mini}
-  chat-path: /v1/chat/completions
+  base-url: ${LLM_BASE_URL:https://api.deepseek.com}
+  api-key: ${DEEPSEEK_API_KEY:}
+  model: ${LLM_MODEL:deepseek-chat}
+  chat-path: /chat/completions
+  system-prompt: ${LLM_SYSTEM_PROMPT:你是一个严谨的知识库问答助手。}
+  stream: false
   temperature: 0.2
   connect-timeout: 5000
   read-timeout: 30000
